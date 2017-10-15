@@ -77,7 +77,8 @@
 (defmacro svg-test-curve (&body body)
   `(svg-file "~/tmp/test.svg"
      (svg-tag "defs" nil
-       (svg-tag "linearGradient" (list 'id "paramgrad")
+       (svg-tag "linearGradient" (list "id" "paramgrad"
+				       "gradientUnits" "userSpaceOnUse")
 	 (svg-tag "stop" (list 'offset "0%"
 			       'stop-color "#268bd2" 'stop-opacity 1))
 	 (svg-tag "stop" (list 'offset "100%"

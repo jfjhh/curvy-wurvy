@@ -214,6 +214,18 @@
    (lambda (x) (funcall xfunc (- 1 x)))
    (lambda (y) (funcall yfunc (- 1 y)))))
 
+(defun add-curves (xf1 yf1 xf2 yf2)
+  (values
+   (lambda (x) (+ (funcall xf1 x) (funcall xf2 x)))
+   (lambda (y) (+ (funcall yf1 y) (funcall yf2 y)))))
+
+(defun rep-curve (rep xfunc yfunc)
+  (if (plusp rep)
+      (values
+       (lambda (x) (funcall xfunc (mod (* x rep) 1)))
+       (lambda (y) (funcall yfunc (mod (* y rep) 1))))
+      (values xfunc yfunc)))
+
 (defun curve->path (curvefunc &rest args)
   (declare (type function curvefunc))
   (apply
@@ -287,3 +299,15 @@
       #'funcs^2->points-derivs
       curvefunc)
      args)))
+
+(defun funcs^2->svg* (xfunc yfunc)
+  (declare (type function xfunc)
+	   (type function yfunc))
+  (svg-test-curve
+    (funcall
+     (multiple-value-compose
+      #'path->svg
+      #'points-controls->path
+      #'points-derivs->points-controls
+      #'funcs^2->points-derivs)
+     xfunc yfunc)))
