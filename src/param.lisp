@@ -41,9 +41,10 @@
   (svg-tag "circle" (list 'stroke "none" 'fill fill 'cx cx 'cy cy 'r 2)))
 
 (defun points->svg (points)
+  ;;; TODO: Make me work in R^n, instead of only R^2.
   (loop :for point :in points :do
      (let* ((x (car point))
-	    (y (cdr point)))
+	    (y (cadr point)))
        (point x y))))
 
 (defun points->derivs (points)
@@ -79,8 +80,10 @@
 	 )
     (cons cx cy)))
 
-(defun points-derivs->controls (points derivs)
-  (let* ((p1 (car points))
+(defun points-derivs->controls (points-derivs)
+  (let* ((points (car points-derivs))
+	 (derivs (cadr points-derivs))
+	 (p1 (car points))
 	 (d1 (car derivs))
 	 (px1 (car p1))
 	 (py1 (cdr p1))
@@ -101,20 +104,22 @@
      )))
 
 (defun points->controls (points)
-  (points-derivs->controls points (points->derivs points)))
+  (points-derivs->controls (list points (points->derivs points))))
 
 (defun points->points-controls (points)
-  (values
+  (list
    points
-   (points-derivs->controls points (points->derivs points))))
+   (points-derivs->controls (list points (points->derivs points)))))
 
-(defun points-derivs->points-controls (points derivs)
-  (values
-   points
-   (points-derivs->controls points derivs)))
+(defun points-derivs->points-controls (points-derivs)
+  (list
+   (car points-derivs)
+   (points-derivs->controls points-derivs)))
 
-(defun points-controls->path (points controls)
-  (let* ((p1 (car points))
+(defun points-controls->path (points-controls)
+  (let* ((points (car points-controls))
+	 (controls (cadr points-controls))
+	 (p1 (car points))
 	 (px1 (car p1))
 	 (py1 (cdr p1)))
     (concatenate
@@ -128,8 +133,8 @@
 		(cx  (car cont))
 		(cy  (cdr cont))
 		(str (format nil "~%~,2f,~,2f ~,2f,~,2f" cx cy px2 py2)))
-	   (point px2 py2)
-	   (point cx cy "#F00")
+	   ;;(point px2 py2)
+	   ;;(point cx cy "#F00")
 	   (setf px1 px2)
 	   (setf py1 py2)
 	   str))))))
@@ -149,21 +154,24 @@
   (loop :for x :from start :to end :by (/ (- end start) (1- n)) :collecting
      (cons x (funcall func x))))
 
-(defun funcs^2->points (xfunc yfunc &optional (n *num-points*) (div 1))
-  (funcs->points xfunc yfunc 0 (min 1 (/ div)) n))
+(defun funcs->points* (funcs &optional (n *num-points*) (div 1))
+  (funcs->points funcs 0 (min 1 (/ div)) n))
 
-(defun funcs->points (xfunc yfunc start end n)
+(defun funcs->points (funcs start end n)
   (loop :for x :from start :to end :by (/ (- end start) (1- n)) :collecting
-     (cons (funcall xfunc x) (funcall yfunc x))))
+     (mapcar (lambda (f) (funcall f x)) funcs)))
 
-(defun funcs^2->points-derivs (xfunc yfunc &optional (n *num-points*) (div 1))
-  (funcs->points-derivs xfunc yfunc 0 (min 1 (/ div)) n))
+(defun funcs->points-derivs* (funcs &optional (n *num-points*) (div 1))
+  (funcs->points-derivs funcs 0 (min 1 (/ div)) n))
 
-(defun funcs->points-derivs (xfunc yfunc start end n)
+(defun funcs->points-derivs (funcs start end n)
+  ;;; TODO: Make me work in R^n, instead of only R^2.
   (let* ((step (/ (- end start) (1- n)))
 	 (du (/ step 1e1))
 	 (points nil)
-	 (derivs nil))
+	 (derivs nil)
+	 (xfunc (car funcs))
+	 (yfunc (cadr funcs)))
     (loop :for u :from start :to end :by step :do
        (let* ((u*  (- u du))
 	      (fx  (funcall xfunc u))
@@ -174,7 +182,7 @@
 	      (dy/du (/ (- fy* fy) du)))
 	 (setf points (cons (cons fx fy) points))
 	 (setf derivs (cons (unless (< (abs dx/du) +cont-eps+) (/ dy/du dx/du)) derivs))))
-    (values
+    (list
      (nreverse points)
      (nreverse derivs))))
 
@@ -184,130 +192,90 @@
 	   (y1 (cdr p1))
 	   (x2 (car p2))
 	   (y2 (cdr p2)))
-       ;;(svg-line x1 y1 x2 y2)
-       ;;(loop :for i :from 1/8 :to 7/8 :by 1/8 :do (point (+ (* x1 i) (* x2 (- 1 i))) (+ (* y1 i) (* y2 (- 1 i)))))
        (svg-tag "circle" (list 'stroke "none" 'fill "url(#paramgrad)" 'cx 0 'cy 0 'r 2)
 	 (svg-tag "animateMotion" (list 'path (format nil "M ~,2f ~,2f L ~,2f ~,2f Z" x1 y1 x2 y2) 'dur "5s" "repeatCount" "indefinite"))))))
 
-(defun circle->funcs^2 (cx cy &optional (radius (* (min cx cy) 3/5)))
-  (values
+(defun circle->funcs (cx cy &optional (radius (* (min cx cy) 3/5)))
+  (list
    (lambda (x) (+ cx (* radius (cos (+ (* TAU x) (* TAU -1/4))))))
    (lambda (y) (+ cy (* radius (sin (+ (* TAU y) (* TAU -1/4))))))))
 
-(defun neocircle->funcs^2 (cx cy &optional (radius (* (min cx cy) 3/5)))
-  (values
+(defun neocircle->funcs (cx cy &optional (radius (* (min cx cy) 3/5)))
+  (list
    (lambda (x) (+ cx (* radius (cos (sin (+ (* TAU x) (* TAU -1/4)))))))
    (lambda (y) (+ cy (* radius (sin (cos (+ (* TAU y) (* TAU -1/4)))))))))
 
-(defun segment->funcs^2 (cx cy &optional (radius (* (min cx cy) 3/5)) (angle 0))
-  (values
+(defun segment->funcs (cx cy &optional (radius (* (min cx cy) 3/5)) (angle 0))
+  (list
    (lambda (x) (+ cx (* 2 radius (cos (- angle)) (+ 1/2 (- x)))))
    (lambda (y) (+ cy (* 2 radius (sin (- angle)) (+ 1/2 (- y)))))))
 
-(defun spiral->funcs^2 (cx cy &optional (radius (* (min cx cy) 3/5)))
-  (values
+(defun spiral->funcs (cx cy &optional (radius (* (min cx cy) 3/5)))
+  (list
    (lambda (x) (+ cx (* radius x (cos (+ (* TAU TAU x))))))
    (lambda (y) (+ cy (* radius y (sin (+ (* TAU TAU y))))))))
 
-(defun invert-curve (xfunc yfunc)
-  (values
-   (lambda (x) (funcall xfunc (- 1 x)))
-   (lambda (y) (funcall yfunc (- 1 y)))))
+(defun invert-curve (funcs)
+  (mapcar (lambda (f) (lambda (u) (funcall f (- 1 u)))) funcs))
 
-(defun add-curves (xf1 yf1 xf2 yf2)
-  (values
-   (lambda (x) (+ (funcall xf1 x) (funcall xf2 x)))
-   (lambda (y) (+ (funcall yf1 y) (funcall yf2 y)))))
+(defun add-curves (&rest funcs-list)
+  (unless (null funcs-list)
+    (apply
+     #'mapcar
+     (lambda (&rest funcs)
+       (lambda (u) (apply #'+ (mapcar (lambda (f) (funcall f u)) funcs))))
+     funcs-list)))
 
-(defun rep-curve (rep xfunc yfunc)
+(defun rep-curve (rep funcs)
   (if (plusp rep)
-      (values
-       (lambda (x) (funcall xfunc (mod (* x rep) 1)))
-       (lambda (y) (funcall yfunc (mod (* y rep) 1))))
-      (values xfunc yfunc)))
+      (mapcar (lambda (f) (lambda (u) (funcall f (mod (* u rep) 1)))) funcs)
+      funcs))
 
 (defun curve->path (curvefunc &rest args)
   (declare (type function curvefunc))
   (apply
-   (multiple-value-compose
+   (compose
     #'points-controls->path
     #'points->points-controls
-    #'funcs^2->points
-    curvefunc)
-   args))
+    #'funcs->points
+    )
+   (apply curvefunc args)))
 
-#||
-(defun funcs^2->path (xfunc yfunc)
+(defun funcs->path (funcs)
   (funcall
-   (multiple-value-compose
-    #'points-controls->path
-    #'points->points-controls
-    #'funcs^2->points)
-   xfunc
-   yfunc))
-||#
-
-(defun funcs^2->path (xfunc yfunc)
-  (funcall
-   (multiple-value-compose
+   (compose
     #'points-controls->path
     #'points-derivs->points-controls
-    #'funcs^2->points-derivs)
-   xfunc
-   yfunc))
+    #'funcs->points-derivs*)
+   funcs))
 
-(defun funcs^2^2->path (f1 args1 f2 args2)
-  (path^2->svg
-   (multiple-value-call #'funcs^2->path (apply f1 args1))
-   (multiple-value-call #'funcs^2->path (apply f2 args2))))
-
-(defun funcs^2^2->path* (f1 args1 f2 args2)
-  (let ((p1 (multiple-value-call #'funcs^2->path (apply f1 args1)))
-	(p2 (multiple-value-call #'funcs^2->path (apply f2 args2))))
-    (path^2->svg p1 p2)
-    (path^2->svg p2 p1)))
-
-(defun curve->svg (curvefunc &rest args)
-  (declare (type function curvefunc))
+(defun funcs-list->svg (funcs-list)
   (svg-test-curve
-    (apply
-     (multiple-value-compose #'points->svg #'funcs^2->points curvefunc)
-     args)))
+    (let ((paths (mapcar #'funcs->path funcs-list)))
+      (maplist
+       (lambda (ps)
+	 (when (cdr ps)
+	   (let ((p1 (car ps))
+		 (p2 (cadr ps)))
+	     (path^2->svg p1 p2)
+	     ;;(path^2->svg p2 p1)
+	     )))
+       paths))))
 
-#||
-(defun curve->svg* (curvefunc &rest args)
-  (declare (type function curvefunc))
-  (svg-test-curve
-    (apply
-     (multiple-value-compose
-      #'path->svg
-      #'points-controls->path
-      #'points->points-controls
-      #'funcs^2->points
-      curvefunc)
-     args)))
-||#
-
-(defun curve->svg* (curvefunc &rest args)
-  (declare (type function curvefunc))
-  (svg-test-curve
-    (apply
-     (multiple-value-compose
-      #'path->svg
-      #'points-controls->path
-      #'points-derivs->points-controls
-      #'funcs^2->points-derivs
-      curvefunc)
-     args)))
-
-(defun funcs^2->svg* (xfunc yfunc)
-  (declare (type function xfunc)
-	   (type function yfunc))
+(defun funcs->svg (funcs)
   (svg-test-curve
     (funcall
-     (multiple-value-compose
+     (compose
+      #'points->svg
+      #'funcs->points*)
+     funcs)))
+
+(defun funcs->svg* (funcs)
+  (svg-test-curve
+    (funcall
+     (compose
       #'path->svg
       #'points-controls->path
       #'points-derivs->points-controls
-      #'funcs^2->points-derivs)
-     xfunc yfunc)))
+      #'funcs->points-derivs*)
+     funcs)))
