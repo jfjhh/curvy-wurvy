@@ -75,7 +75,7 @@
   (svg-tag "line" (list 'x1 x1 'y1 y1 'x2 x2 'y2 y2)))
 
 (defmacro svg-test-curve (&body body)
-  `(svg-file "~/tmp/test.svg"
+  `(svg-file "./test.svg"
      (svg-tag "defs" nil
        (svg-tag "linearGradient" (list "id" "paramgrad"
 				       ;;"gradientUnits" "userSpaceOnUse"
