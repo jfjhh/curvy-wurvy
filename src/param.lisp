@@ -7,7 +7,7 @@
 
 (defconstant TAU (* 2 PI))
 
-(defparameter *num-points* 128)
+(defparameter *num-points* 64)
 
 (defparameter +cont-eps+ (expt 10 -6))
 
@@ -143,10 +143,17 @@
   (svg-tag "path" (list 'fill "transparent" 'stroke "url(#paramgrad)" 'd path)))
 
 (defun path^2->svg (p1 p2 &optional (dur 5))
-  (svg-tag "path" (list 'fill "transparent" 'stroke "url(#paramgrad)" 'd "M 0 0")
+  (svg-tag "path" (list 'fill "transparent" 'stroke "url(#paramgrad_anim)" 'd "M 0 0"
+			"pathLength" 1)
+    (svg-tag "animate"
+	(list "attributeName" "stroke-dasharray"
+	      "values" (format nil "~{~a~^;~}" '(0 1 0))
+	      "dur" (format nil "~,2fs" dur)
+	      "repeatCount" "indefinite"))
     (svg-tag "animate"
 	(list "attributeName" "d"
-	      "from" p1 "to" p2
+	      ;;"from" p1 "to" p2
+	      "values" (format nil "~a;~a;~2:*" p1 p2)
 	      "dur" (format nil "~,2fs" dur)
 	      "repeatCount" "indefinite"))))
 
